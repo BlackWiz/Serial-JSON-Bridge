@@ -6,12 +6,6 @@
 #include "jsmn.h"
 #include "Uart.h"
 
-
-extern int txbusy;
-extern int rxbusy;
-extern int txindex;
-extern int rxindex;
-
 /*
  * A small example of jsmn parsing when JSON structure is known and number of
  * tokens is predictable.
@@ -36,25 +30,10 @@ int main()
 	
 	NVIC_EnableIRQ(USART2_IRQn); // Enable USART2 interrupts in NVIC
 
-  __enable_irq();  // Enable global interrupts
+    __enable_irq();  // Enable global interrupts
 
-  // Start RX reception
-  rxbusy = 1;
-  rxindex = 0;
-  USART2->CR1 |= (1 << 5);  // Enable RXNE interrupt
 		
-	char buffer[200];
-
-  // Test Logic to transmit a string via UART
-	/*
-	while(1)
-	{
-	if(!txbusy)
-	{
-	tx_string(JSON_STRING);
-	delay(500);
-	}
-  } */
+  char buffer[200];
 		
   int i;
   int r;
@@ -69,9 +48,9 @@ int main()
   if (r < 0) {
     sprintf(buffer,"Failed to parse JSON: %d\n", r);
 
-		if(!txbusy)
+		if(!txstate)
 		{
-		tx_string(buffer);
+		uart_transmit_buffer(buffer);
 		delay(500);
 		}
 	return 1;
@@ -81,9 +60,9 @@ int main()
   if (r < 1 || t[0].type != JSMN_OBJECT) {
    sprintf(buffer,"Object expected\n");
 
-	 if(!txbusy)
+	 if(!txstate)
 	 {
-		tx_string(buffer);
+		uart_transmit_buffer(buffer);
 		delay(500);
 	 }
 	 return 1;
@@ -96,9 +75,9 @@ int main()
       sprintf(buffer,"- User: %.*s\r\n", t[i + 1].end - t[i + 1].start,
              JSON_STRING + t[i + 1].start);
 			
-			if(!txbusy)
+			if(!txstate)
 			{
-			tx_string(buffer);
+			uart_transmit_buffer(buffer);
 			delay(500);
 			}	
       i++;
@@ -107,9 +86,9 @@ int main()
      sprintf(buffer,"- Admin: %.*s\r\n", t[i + 1].end - t[i + 1].start,
              JSON_STRING + t[i + 1].start);
 
-			if(!txbusy)
+			if(!txstate)
 			{
-			tx_string(buffer);
+			uart_transmit_buffer(buffer);
 			delay(500);
 			} 
       i++;
@@ -118,9 +97,9 @@ int main()
       sprintf(buffer,"- UID: %.*s\r\n", t[i + 1].end - t[i + 1].start,
              JSON_STRING + t[i + 1].start);
 
-			if(!txbusy)
+			if(!txstate)
 			{
-			tx_string(buffer);
+			uart_transmit_buffer(buffer);
 			delay(500);
 			}
 
@@ -129,9 +108,9 @@ int main()
       int j;
       sprintf(buffer,"- Groups:\r\n");
 
-			if(!txbusy)
+			if(!txstate)
 			{
-			tx_string(buffer);
+			uart_transmit_buffer(buffer);
 			delay(500);
 			}
       if (t[i + 1].type != JSMN_ARRAY) {
@@ -140,9 +119,9 @@ int main()
       for (j = 0; j < t[i + 1].size; j++) {
         jsmntok_t *g = &t[i + j + 2];
         sprintf(buffer,"  * %.*s\r\n", g->end - g->start, JSON_STRING + g->start);
-			if(!txbusy)
+			if(!txstate)
 			{
-			tx_string(buffer);
+			uart_transmit_buffer(buffer);
 			delay(500);
 			}
 		}
@@ -150,9 +129,9 @@ int main()
     } else {
       sprintf(buffer,"Unexpected key: %.*s\r\n", t[i].end - t[i].start,
              JSON_STRING + t[i].start);
-			if(!txbusy)
+			if(!txstate)
 			{
-			tx_string(buffer);
+			uart_transmit_buffer(buffer);
 			delay(500);
 			}
     }
