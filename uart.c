@@ -3,7 +3,11 @@
 #include "stddef.h"
 #include <stdlib.h>
 #include <string.h>
-#include "Uart.h"
+#include "uart.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Required Variables for handling and executing UART state machine
 volatile const char *txbuffer;
@@ -202,3 +206,6 @@ void delay(int n)
 	SysTick->CTRL &= ~(1 << 0);
 }
 
+#ifdef __cplusplus
+}
+#endif

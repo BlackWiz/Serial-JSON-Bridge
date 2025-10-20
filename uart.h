@@ -26,17 +26,6 @@ UART_ERROR_PARITY,
 UART_ERROR_NOISE
 }uart_error;
 
-// Declaring Variables for handling and executing UART state machine
-extern volatile const char *txbuffer;
-extern char rxbuffer_storage[RX_BUFF_SIZE];
-extern char *rxbuffer;
-extern volatile int txlength;
-extern volatile int txindex;
-extern volatile int rxindex;
-extern volatile int txstate;
-extern volatile int rxstate;
-extern volatile int error;
-
 // Necessary Functions for UART functionality
 int uart_init(void);
 int uart_transmit_buffer(const char * str);
