@@ -1,7 +1,5 @@
 #include "stm32g0xx.h"
 #include "stdio.h"
-#include "stddef.h"
-#include <stdlib.h>
 #include <string.h>
 #include "jsmn.h"
 #include "uart.h"
@@ -40,6 +38,11 @@ static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
   }
   return -1;
 } 
+
+void json_process_init()
+{
+	uart_init();
+}
 
 
 int json_process() 
@@ -151,7 +154,7 @@ int json_process()
 			}
     }
   }
-	 return EXIT_SUCCESS;
+	 return 0;
 }
  
 #ifdef __cplusplus
