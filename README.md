@@ -1,24 +1,77 @@
 # Serial-JSON-Bridge
-A lightweight and easy-to-use library for STM32 microcontrollers to handle command and control over a UART serial connection using the JSON data format.
 
-**Project Overview**
+## Why This Exists
 
-The core of this project is to bridge the gap between high-level applications and low-level hardware control. A Python script running on a host PC creates and sends JSON-formatted commands. An STM32 microcontroller receives this data via UART, parses the JSON string to extract commands and parameters, and then directly manipulates hardware peripherals—such as controlling the brightness of an LED or the angle of a servo motor using PWM.
+I built this for one reason: to understand how parsers actually work. How do you take a massive chunk of data, break it into pieces, and send it through a protocol without messing it up?
 
-This project serves as a practical example of a host-controller system, a fundamental design pattern in robotics, IoT, and industrial automation.
+That's the core of everything in embedded systems.
 
-**Architecture**
+## What I Got Out of It
 
-The data flows from the host computer to the microcontroller, which then actuates the hardware.
+- Actually understood driver architecture instead of just copying code
+- Debugged a hard fault and learned what "memory constraints" really means
+- Built something that doesn't fall apart when someone else tries to use it
 
--> `JSON Command String` -> `UART Serial` -> -> Parse JSON -> ``
+## What It Does
 
-**Key Features**
+Takes a hardcoded JSON string embedded in the STM32 firmware, parses it using JSMN on the microcontroller itself, extracts the key-value pairs, and transmits the parsed data back through UART to a virtual COM port. All on bare-metal hardware with fixed memory.
 
-Structured Command Protocol: Utilizes JSON for sending clear, human-readable, and easily expandable commands.
+```mermaid
+graph LR
+    A[Hardcoded JSON String] -->|In Firmware| B[JSMN Parser on STM32]
+    B -->|Tokenize| C[Extract Keys & Values]
+    C -->|Format Output| D[UART TX]
+    D -->|Serial Data| E[Virtual COM Port/PC]
+    
+    style A fill:#ffe6e6,stroke:#333
+    style B fill:#e6f3ff,stroke:#333
+    style C fill:#e6ffe6,stroke:#333
+    style E fill:#fff4e6,stroke:#333
+```
 
-Serial Communication: Employs the fundamental UART protocol for reliable data transfer between the host and microcontroller.   
+## How I Built This
 
-On-Device Parsing: The resource-constrained STM32 microcontroller parses the incoming JSON strings to make real-time decisions.
+**Step 1: Started Stupid Simple**  
+Picked UART because it's the most basic protocol. No fancy stuff. Just understand how data actually moves.
 
-Real-Time Hardware Control: Demonstrates precise hardware control by manipulating PWM signals to control an LED's brightness and a servo's position.
+**Step 2: Kept Driver and App Completely Separate**  
+Driver handles all the hardware setup. App doesn't touch any of it. This separation is everything.
+
+**Step 3: Actually Built a Parser**  
+Took incoming data, broke it into tokens, sent it forward without losing anything. Sounds simple but it's not.
+
+**Step 4: Tested on Real Hardware**  
+Stopped simulating. Used actual boards. Reality hits different.
+
+**Step 5: Hit a Wall and Learned**  
+Stack overflow crashed everything. That one mistake taught me more than anything that worked smoothly. Understanding hardware limits is what separates embedded engineers from everyone else.
+
+## The Architecture
+
+**uart.c** → Interrupt-driven UART driver. Handles TX/RX byte-by-byte with state machines (IDLE, BUSY, ERROR).
+
+**jsmn.c** → Lightweight JSON parser. No memory allocation. Just returns token indices pointing to the original string.
+
+**jsonprocess.c** → Application logic. Takes tokens from JSMN, extracts key-value pairs, executes commands.
+
+Send `{"user": "johndoe", "uid": 1000}` and watch it parse, extract, and respond.
+
+## What Actually Matters
+
+**Memory constraints:** STM32 has limited stack. I overflowed it and got hard faults. Fixed buffers and careful indexing are non-negotiable.
+
+**State machines:** UART runs on interrupts. One byte at a time. Miss a state and you lose data or hang.
+
+**Separation:** When parsing logic mixed with driver code, debugging was impossible. Clean layers mean you can isolate problems.
+
+**Error handling:** UART can fail (overrun, framing, noise). The driver catches these and provides recovery. Ignore them and your system dies silently.
+
+## Tech Stack
+
+STM32G0 | UART (9600 baud) | JSMN Parser | Bare-metal C
+
+Tested on real hardware. No HAL. No simulation lies.
+
+---
+
+*Built to understand parsers. Debugged through crashes. That's how you actually learn embedded systems.*
