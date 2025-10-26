@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "uart.h"
+#include "types.h"  /* For bool_t type */
 
 /* Delay between normal mode transmissions in milliseconds */
 #define NORMAL_MODE_TX_DELAY_MS    5000u

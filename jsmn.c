@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "jsmn.h"
+#include "types.h"  /* For bool_t type */
 
 #ifdef __cplusplus
 extern "C" {
@@ -130,7 +131,7 @@ jsmn_parse_primitive (jsmn_parser_t * p_parser, char const * const p_js,
 {
     jsmntok_t * p_token = NULL;
     uint32_t start = p_parser->pos;
-    bool b_found = false;
+    bool_t b_found = FALSE;  /* Changed to bool_t for Keil */
 
     for (; (p_parser->pos < len) && (CHAR_NULL != p_js[p_parser->pos]); 
          p_parser->pos++)
@@ -148,7 +149,7 @@ jsmn_parse_primitive (jsmn_parser_t * p_parser, char const * const p_js,
             case CHAR_BRACKET_CLOSE:
             case CHAR_BRACE_CLOSE:
             {
-                b_found = true;
+                b_found = TRUE;  /* Changed to TRUE for Keil */
                 break;
             }
             
@@ -226,7 +227,7 @@ jsmn_parse_string (jsmn_parser_t * p_parser, char const * const p_js,
 {
     jsmntok_t * p_token = NULL;
     uint32_t start = p_parser->pos;
-    bool b_valid_hex = true;
+    bool_t b_valid_hex = TRUE;  /* Changed to bool_t for Keil */
 
     /* Skip starting quote */
     p_parser->pos++;

@@ -10,7 +10,7 @@
 #define UART_H
 
 #include <stdint.h>
-#include <stdbool.h>
+#include "types.h"  /* For bool_t type (Keil compatible) */
 
 /* Buffer size for UART reception */
 #define RX_BUFFER_SIZE_BYTES   100u

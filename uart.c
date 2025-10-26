@@ -14,6 +14,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "uart.h"
+#include "types.h"  /* For bool_t type */
 
 #ifdef __cplusplus
 extern "C" {
@@ -189,7 +190,7 @@ uart_receive_buffer (void)
 void
 USART2_IRQHandler (void)
 {
-    bool b_has_error = false;
+    bool_t b_has_error = FALSE;  /* Changed to bool_t for Keil */
 
     /* Handle transmit interrupt - TXE flag set */
     if (((USART2->ISR & (1u << USART_ISR_TXE_BIT)) != 0u) && 

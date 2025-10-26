@@ -99,7 +99,7 @@ json_process (void)
     char output_buffer[OUTPUT_BUFFER_SIZE];
     int32_t i;
     int32_t parse_result;
-    jsmn_parser parser;
+    jsmn_parser_t parser;
     jsmntok_t tokens[MAX_JSON_TOKENS];
 
     /* Initialize JSMN parser */
