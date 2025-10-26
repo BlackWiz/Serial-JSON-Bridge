@@ -1,10 +1,20 @@
-#ifndef JSON_PROCESS_H
-#define JSON_PROCESS_H
+/** @file jsonprocess.h
+ *
+ * @brief JSON parsing and processing interface for embedded UART communication.
+ *
+ * @par
+ * COPYRIGHT NOTICE: (c) 2025 Your Name. All rights reserved.
+ */
 
+#ifndef JSONPROCESS_H
+#define JSONPROCESS_H
 
+#include <stdint.h>
 
-// Necessary Functions for JSON Parse functionality
+/* Public API functions */
 void json_process_init(void);
-int json_process(void); 
+int32_t json_process(void);
 
-#endif /* JSON_PROCESS_H */
+#endif /* JSONPROCESS_H */
+
+/*** end of file ***/

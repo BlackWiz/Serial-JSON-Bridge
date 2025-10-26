@@ -1,4 +1,11 @@
-/*
+/** @file jsmn.h
+ *
+ * @brief Minimalistic JSON parser for embedded systems.
+ *
+ * JSMN (pronounced like 'jasmine') is a minimalistic JSON parser in C.
+ * It can be easily integrated into resource-limited projects or embedded systems.
+ *
+ * @par
  * MIT License
  *
  * Copyright (c) 2010 Serge Zaitsev
@@ -21,10 +28,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+
 #ifndef JSMN_H
 #define JSMN_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,41 +47,45 @@ extern "C" {
 
 /**
  * JSON type identifier. Basic types are:
- * 	o Object
- * 	o Array
- * 	o String
- * 	o Other primitive: number, boolean (true/false) or null
+ *   o Object
+ *   o Array
+ *   o String
+ *   o Other primitive: number, boolean (true/false) or null
  */
-typedef enum {
-  JSMN_UNDEFINED = 0,
-  JSMN_OBJECT = 1 << 0,
-  JSMN_ARRAY = 1 << 1,
-  JSMN_STRING = 1 << 2,
-  JSMN_PRIMITIVE = 1 << 3
+typedef enum
+{
+    JSMN_UNDEFINED = 0,
+    JSMN_OBJECT = 1 << 0,
+    JSMN_ARRAY = 1 << 1,
+    JSMN_STRING = 1 << 2,
+    JSMN_PRIMITIVE = 1 << 3
 } jsmntype_t;
 
-enum jsmnerr {
-  /* Not enough tokens were provided */
-  JSMN_ERROR_NOMEM = -1,
-  /* Invalid character inside JSON string */
-  JSMN_ERROR_INVAL = -2,
-  /* The string is not a full JSON packet, more bytes expected */
-  JSMN_ERROR_PART = -3
+/**
+ * JSMN error codes
+ */
+enum jsmnerr
+{
+    JSMN_ERROR_NOMEM = -1,  /* Not enough tokens were provided */
+    JSMN_ERROR_INVAL = -2,  /* Invalid character inside JSON string */
+    JSMN_ERROR_PART = -3    /* The string is not a full JSON packet */
 };
 
 /**
  * JSON token description.
- * type		type (object, array, string etc.)
- * start	start position in JSON data string
- * end		end position in JSON data string
+ * type     type (object, array, string etc.)
+ * start    start position in JSON data string
+ * end      end position in JSON data string
+ * size     number of child tokens
  */
-typedef struct jsmntok {
-  jsmntype_t type;
-  int start;
-  int end;
-  int size;
+typedef struct jsmntok
+{
+    jsmntype_t type;
+    int32_t start;
+    int32_t end;
+    int32_t size;
 #ifdef JSMN_PARENT_LINKS
-  int parent;
+    int32_t parent;
 #endif
 } jsmntok_t;
 
@@ -80,27 +93,32 @@ typedef struct jsmntok {
  * JSON parser. Contains an array of token blocks available. Also stores
  * the string being parsed now and current position in that string.
  */
-typedef struct jsmn_parser {
-  unsigned int pos;     /* offset in the JSON string */
-  unsigned int toknext; /* next token to allocate */
-  int toksuper;         /* superior token node, e.g. parent object or array */
-} jsmn_parser;
+typedef struct jsmn_parser
+{
+    uint32_t pos;      /* offset in the JSON string */
+    uint32_t toknext;  /* next token to allocate */
+    int32_t toksuper;  /* superior token node, e.g. parent object or array */
+} jsmn_parser_t;
 
 /**
  * Create JSON parser over an array of tokens
  */
-JSMN_API void jsmn_init(jsmn_parser *parser);
+JSMN_API void jsmn_init(jsmn_parser_t * p_parser);
 
 /**
- * Run JSON parser. It parses a JSON data string into and array of tokens, each
- * describing
- * a single JSON object.
+ * Run JSON parser. It parses a JSON data string into an array of tokens,
+ * each describing a single JSON object.
  */
-JSMN_API int jsmn_parse(jsmn_parser *parser, const char *js, const size_t len,
-                        jsmntok_t *tokens, const unsigned int num_tokens);
+JSMN_API int32_t jsmn_parse(jsmn_parser_t * p_parser, 
+                            char const * const p_js, 
+                            size_t const len,
+                            jsmntok_t * p_tokens, 
+                            uint32_t const num_tokens);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* JSMN_H */
+
+/*** end of file ***/

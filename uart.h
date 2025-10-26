@@ -1,36 +1,53 @@
+/** @file uart.h
+ *
+ * @brief UART driver interface for STM32G0 interrupt-driven communication.
+ *
+ * @par
+ * COPYRIGHT NOTICE: (c) 2025 Your Name. All rights reserved.
+ */
+
 #ifndef UART_H
 #define UART_H
 
-#define RX_BUFF_SIZE 100
-#define UART_NORMAL 0
-#define UART_ECHO_ENABLE 1 // Enable or disable echo by default
+#include <stdint.h>
+#include <stdbool.h>
 
-#define UART_CONFIG UART_NORMAL
+/* Buffer size for UART reception */
+#define RX_BUFFER_SIZE_BYTES   100u
 
-// Enum for UART State Machine
+/* UART configuration modes */
+#define UART_MODE_NORMAL       0u
+#define UART_MODE_ECHO         1u
+
+/* Select active UART mode */
+#define UART_CONFIG            UART_MODE_NORMAL
+
+/* UART state machine states */
 typedef enum
 {
-UART_STATE_IDLE,
-UART_STATE_TXBUSY,
-UART_STATE_RXBUSY,
-UART_STATE_ERROR
-}uart_state;
+    UART_STATE_IDLE   = 0,
+    UART_STATE_TX_BUSY,
+    UART_STATE_RX_BUSY,
+    UART_STATE_ERROR
+} uart_state_t;
 
-// Enum for UART Error Codes --> These are Hardware reported errors
+/* UART hardware error codes */
 typedef enum
 {
-UART_ERROR_NONE,
-UART_ERROR_OVERRUN,
-UART_ERROR_FRAMING,
-UART_ERROR_PARITY,
-UART_ERROR_NOISE
-}uart_error;
+    UART_ERROR_NONE    = 0,
+    UART_ERROR_OVERRUN,
+    UART_ERROR_FRAMING,
+    UART_ERROR_PARITY,
+    UART_ERROR_NOISE
+} uart_error_t;
 
-// Necessary Functions for UART functionality
-int uart_init(void);
-int uart_transmit_buffer(const char * str);
-int uart_receive_buffer();
-void error_reset();
-void delay(int n);
+/* Public API functions */
+int32_t uart_init(void);
+int32_t uart_transmit_buffer(char const * const p_str);
+int32_t uart_receive_buffer(void);
+void uart_error_reset(void);
+void delay_ms(uint32_t milliseconds);
 
-#endif  /* UART_H */
+#endif /* UART_H */
+
+/*** end of file ***/

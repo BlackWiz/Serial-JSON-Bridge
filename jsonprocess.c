@@ -1,5 +1,18 @@
+/** @file jsonprocess.c
+ *
+ * @brief JSON parsing and UART transmission using JSMN library.
+ *
+ * Parses embedded JSON string and transmits key-value pairs via UART.
+ * Demonstrates token extraction from JSON using JSMN's zero-allocation parser.
+ *
+ * @par
+ * COPYRIGHT NOTICE: (c) 2025 Your Name. All rights reserved.
+ */
+
 #include "stm32g0xx.h"
-#include "stdio.h"
+#include <stdint.h>
+#include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 #include "jsmn.h"
 #include "uart.h"
@@ -9,154 +22,222 @@
 extern "C" {
 #endif
 
+/* Maximum tokens expected in JSON string */
+#define MAX_JSON_TOKENS         15u
 
-// Declaring Variables for handling and executing UART state machine
-extern volatile const char *txbuffer;
-extern char rxbuffer_storage[RX_BUFF_SIZE];
-extern char *rxbuffer;
-extern volatile int txlength;
-extern volatile int txindex;
-extern volatile int rxindex;
-extern volatile int txstate;
-extern volatile int rxstate;
-extern volatile int error;
+/* Maximum buffer size for formatted output strings */
+#define OUTPUT_BUFFER_SIZE      200u
 
+/* Delay between UART transmissions in milliseconds */
+#define TX_DELAY_MS             500u
 
-/*
- * A small example of jsmn parsing when JSON structure is known and number of
- * tokens is predictable.
- */
+/* Error codes for JSON processing */
+#define JSON_ERR_PARSE_FAILED   1
+#define JSON_ERR_NO_OBJECT      2
+#define JSON_SUCCESS            0
 
-static const char JSON_STRING[] =
+/* External UART state variables */
+extern volatile uart_state_t g_tx_state;
+
+/* Hardcoded JSON test string */
+static char const JSON_STRING[] =
     "{\"user\": \"johndoe\", \"admin\": false, \"uid\": 1000,\n  "
     "\"groups\": [\"users\", \"wheel\", \"audio\", \"video\"]}";
 
-static int jsoneq(const char *json, jsmntok_t *tok, const char *s) {
-  if (tok->type == JSMN_STRING && (int)strlen(s) == tok->end - tok->start &&
-      strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
-    return 0;
-  }
-  return -1;
-} 
 
-void json_process_init()
+/*!
+ * @brief Compare JSON token string with target string.
+ *
+ * @param[in] p_json Pointer to complete JSON string.
+ * @param[in] p_tok Pointer to token to compare.
+ * @param[in] p_s Target string for comparison.
+ *
+ * @return 0 if strings match, -1 otherwise.
+ */
+static int32_t
+jsoneq (char const * const p_json, jsmntok_t const * const p_tok, 
+        char const * const p_s)
 {
-	uart_init();
-}
+    int32_t result = -1;
+    size_t target_len = strlen(p_s);
+    int32_t token_len = p_tok->end - p_tok->start;
 
-
-int json_process() 
-{
-		
-  char buffer[200];		
-  int i;
-  int r;
-  jsmn_parser p;
-  jsmntok_t t[15]; /* We expect no more than 128 tokens */
-
-
-  jsmn_init(&p);
-  r = jsmn_parse(&p, JSON_STRING, strlen(JSON_STRING), t,
-                 sizeof(t) / sizeof(t[0]));
-	
-	NVIC_EnableIRQ(USART2_IRQn); // Enable USART2 interrupts in NVIC
-
-	__enable_irq();  // Enable global interrupts
-								 
-  if (r < 0) {
-    sprintf(buffer,"Failed to parse JSON: %d\n", r);
-
-		if(!txstate)
-		{
-		uart_transmit_buffer(buffer);
-		delay(500);
-		}
-		return 1;   // Error Code : JSON string cannot be parsed
-}
-
-  /* Assume the top-level element is an object */
-  if (r < 1 || t[0].type != JSMN_OBJECT) {
-   sprintf(buffer,"Object expected\n");
-
-	 if(!txstate)
-	 {
-		uart_transmit_buffer(buffer);
-		delay(500);
-	 }
-	 return 2;  // Error code : Object expected
-}
-
-  /* Loop over all keys of the root object */
-  for (i = 1; i < r; i++) {
-    if (jsoneq(JSON_STRING, &t[i], "user") == 0) {
-      /* We may use strndup() to fetch string value */
-      sprintf(buffer,"- User: %.*s\r\n", t[i + 1].end - t[i + 1].start,
-             JSON_STRING + t[i + 1].start);
-			
-			if(!txstate)
-			{
-			uart_transmit_buffer(buffer);
-			delay(500);
-			}	
-      i++;
-    } else if (jsoneq(JSON_STRING, &t[i], "admin") == 0) {
-      /* We may additionally check if the value is either "true" or "false" */
-     sprintf(buffer,"- Admin: %.*s\r\n", t[i + 1].end - t[i + 1].start,
-             JSON_STRING + t[i + 1].start);
-
-			if(!txstate)
-			{
-			uart_transmit_buffer(buffer);
-			delay(500);
-			} 
-      i++;
-    } else if (jsoneq(JSON_STRING, &t[i], "uid") == 0) {
-      /* We may want to do strtol() here to get numeric value */
-      sprintf(buffer,"- UID: %.*s\r\n", t[i + 1].end - t[i + 1].start,
-             JSON_STRING + t[i + 1].start);
-
-			if(!txstate)
-			{
-			uart_transmit_buffer(buffer);
-			delay(500);
-			}
-
-      i++;
-    } else if (jsoneq(JSON_STRING, &t[i], "groups") == 0) {
-      int j;
-      sprintf(buffer,"- Groups:\r\n");
-
-			if(!txstate)
-			{
-			uart_transmit_buffer(buffer);
-			delay(500);
-			}
-      if (t[i + 1].type != JSMN_ARRAY) {
-        continue; /* We expect groups to be an array of strings */
-      }
-      for (j = 0; j < t[i + 1].size; j++) {
-        jsmntok_t *g = &t[i + j + 2];
-        sprintf(buffer,"  * %.*s\r\n", g->end - g->start, JSON_STRING + g->start);
-			if(!txstate)
-			{
-			uart_transmit_buffer(buffer);
-			delay(500);
-			}
-		}
-      i += t[i + 1].size + 1;
-    } else {
-      sprintf(buffer,"Unexpected key: %.*s\r\n", t[i].end - t[i].start,
-             JSON_STRING + t[i].start);
-			if(!txstate)
-			{
-			uart_transmit_buffer(buffer);
-			delay(500);
-			}
+    if ((JSMN_STRING == p_tok->type) && 
+        ((int32_t)target_len == token_len) &&
+        (0 == strncmp(p_json + p_tok->start, p_s, (size_t)token_len)))
+    {
+        result = 0;
     }
-  }
-	 return 0;
+
+    return result;
 }
- 
+
+
+/*!
+ * @brief Initialize JSON processing subsystem.
+ *
+ * Initializes UART peripheral required for JSON output transmission.
+ */
+void
+json_process_init (void)
+{
+    (void)uart_init();
+}
+
+
+/*!
+ * @brief Parse and transmit JSON data via UART.
+ *
+ * Parses hardcoded JSON string using JSMN, extracts key-value pairs,
+ * and transmits formatted output via UART. Handles arrays and primitives.
+ *
+ * @return 0 on success, positive error code on failure.
+ */
+int32_t
+json_process (void)
+{
+    char output_buffer[OUTPUT_BUFFER_SIZE];
+    int32_t i;
+    int32_t parse_result;
+    jsmn_parser parser;
+    jsmntok_t tokens[MAX_JSON_TOKENS];
+
+    /* Initialize JSMN parser */
+    jsmn_init(&parser);
+    
+    parse_result = jsmn_parse(&parser, JSON_STRING, strlen(JSON_STRING), 
+                              tokens, MAX_JSON_TOKENS);
+    
+    /* Enable USART2 interrupts */
+    NVIC_EnableIRQ(USART2_IRQn);
+    __enable_irq();
+
+    /* Check if parsing succeeded */
+    if (parse_result < 0)
+    {
+        (void)sprintf(output_buffer, "Failed to parse JSON: %ld\r\n", 
+                      (long)parse_result);
+
+        if (UART_STATE_IDLE == g_tx_state)
+        {
+            (void)uart_transmit_buffer(output_buffer);
+            delay_ms(TX_DELAY_MS);
+        }
+        
+        return JSON_ERR_PARSE_FAILED;
+    }
+
+    /* Verify top-level element is an object */
+    if ((parse_result < 1) || (JSMN_OBJECT != tokens[0].type))
+    {
+        (void)sprintf(output_buffer, "Object expected\r\n");
+
+        if (UART_STATE_IDLE == g_tx_state)
+        {
+            (void)uart_transmit_buffer(output_buffer);
+            delay_ms(TX_DELAY_MS);
+        }
+        
+        return JSON_ERR_NO_OBJECT;
+    }
+
+    /* Process all keys in root object */
+    for (i = 1; i < parse_result; i++)
+    {
+        if (0 == jsoneq(JSON_STRING, &tokens[i], "user"))
+        {
+            (void)sprintf(output_buffer, "- User: %.*s\r\n", 
+                          tokens[i + 1].end - tokens[i + 1].start,
+                          JSON_STRING + tokens[i + 1].start);
+            
+            if (UART_STATE_IDLE == g_tx_state)
+            {
+                (void)uart_transmit_buffer(output_buffer);
+                delay_ms(TX_DELAY_MS);
+            }
+            i++;
+        }
+        else if (0 == jsoneq(JSON_STRING, &tokens[i], "admin"))
+        {
+            (void)sprintf(output_buffer, "- Admin: %.*s\r\n", 
+                          tokens[i + 1].end - tokens[i + 1].start,
+                          JSON_STRING + tokens[i + 1].start);
+
+            if (UART_STATE_IDLE == g_tx_state)
+            {
+                (void)uart_transmit_buffer(output_buffer);
+                delay_ms(TX_DELAY_MS);
+            }
+            i++;
+        }
+        else if (0 == jsoneq(JSON_STRING, &tokens[i], "uid"))
+        {
+            (void)sprintf(output_buffer, "- UID: %.*s\r\n", 
+                          tokens[i + 1].end - tokens[i + 1].start,
+                          JSON_STRING + tokens[i + 1].start);
+
+            if (UART_STATE_IDLE == g_tx_state)
+            {
+                (void)uart_transmit_buffer(output_buffer);
+                delay_ms(TX_DELAY_MS);
+            }
+            i++;
+        }
+        else if (0 == jsoneq(JSON_STRING, &tokens[i], "groups"))
+        {
+            int32_t j;
+            
+            (void)sprintf(output_buffer, "- Groups:\r\n");
+
+            if (UART_STATE_IDLE == g_tx_state)
+            {
+                (void)uart_transmit_buffer(output_buffer);
+                delay_ms(TX_DELAY_MS);
+            }
+            
+            /* Verify groups is an array */
+            if (JSMN_ARRAY != tokens[i + 1].type)
+            {
+                continue;
+            }
+            
+            /* Process array elements */
+            for (j = 0; j < tokens[i + 1].size; j++)
+            {
+                jsmntok_t const * const p_group = &tokens[i + j + 2];
+                
+                (void)sprintf(output_buffer, "  * %.*s\r\n", 
+                              p_group->end - p_group->start, 
+                              JSON_STRING + p_group->start);
+                
+                if (UART_STATE_IDLE == g_tx_state)
+                {
+                    (void)uart_transmit_buffer(output_buffer);
+                    delay_ms(TX_DELAY_MS);
+                }
+            }
+            
+            i += tokens[i + 1].size + 1;
+        }
+        else
+        {
+            (void)sprintf(output_buffer, "Unexpected key: %.*s\r\n", 
+                          tokens[i].end - tokens[i].start,
+                          JSON_STRING + tokens[i].start);
+            
+            if (UART_STATE_IDLE == g_tx_state)
+            {
+                (void)uart_transmit_buffer(output_buffer);
+                delay_ms(TX_DELAY_MS);
+            }
+        }
+    }
+    
+    return JSON_SUCCESS;
+}
+
 #ifdef __cplusplus
 }
 #endif
+
+/*** end of file ***/
