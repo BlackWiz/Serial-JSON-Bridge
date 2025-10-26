@@ -10,7 +10,6 @@
  * COPYRIGHT NOTICE: (c) 2025 Your Name. All rights reserved.
  */
 
-#include "stm32g0xx.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>

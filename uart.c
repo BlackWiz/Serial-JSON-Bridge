@@ -9,7 +9,6 @@
  * COPYRIGHT NOTICE: (c) 2025 Your Name. All rights reserved.
  */
 
-#include "stm32g0xx.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
@@ -52,6 +51,7 @@ extern "C" {
 #define SYSTICK_CTRL_CLKSRC_BIT    2u
 #define SYSTICK_CTRL_COUNTFLAG_BIT 16u
 #define SYSTICK_MS_DIVISOR         1000u
+#define SYSTEM_CORE_CLOCK 16000000UL // Default 16 MHz HSI clock
 
 /* Global state variables for UART state machine */
 volatile char const * g_p_tx_buffer;
@@ -64,6 +64,85 @@ volatile uart_state_t g_tx_state = UART_STATE_IDLE;
 volatile uart_state_t g_rx_state = UART_STATE_IDLE;
 volatile uart_error_t g_error = UART_ERROR_NONE;
 
+/* Defining UART Registers used  */
+/*
+
+In this project currently USART2 is chosen so as to transmit the JSON payload into Virtual Com Port
+In STM32G071RBTx uC, USART2 has the possibility of connecting to a virtual com port as it is an internally connected port
+If in the case where the JSON payload needs to be transmitte to a different Rx via a different USART instance, then
+RM0444 specification can be referred and set the USART instances along with their register values accordingly 
+
+USART_CR1 --> At an Offset of 0x00
+USART_BRR --> At an Offset of 0x0C
+USART_ISR --> At an Offset of 0x1C
+USART_ICR --> At an Offset of 0x20
+USART_RDR --> At an Offset of 0x24
+USART_TDR --> At an Offset of 0x28
+
+*/
+volatile uint32_t * USART2 = (uint32_t *) 0x40004400; 
+
+volatile uint32_t * USART_CR1 = (uint32_t *) 0x40004400;
+volatile uint32_t * USART_BRR = (uint32_t *) 0x4000440C;
+volatile uint32_t * USART_ISR = (uint32_t *) 0x4000441C;
+volatile uint32_t * USART_ICR = (uint32_t *) 0x40004420;
+volatile uint32_t * USART_RDR = (uint32_t *) 0x40004424;
+volatile uint32_t * USART_TDR = (uint32_t *) 0x40004428;
+
+/* Defining RCC Registers used  */
+/*
+
+RCC_IOPENR --> At an Offset of 0x34
+RCC_APBENR1 --> At an Offset of 0x3C
+
+*/
+volatile uint32_t * RCC = (uint32_t *) 0x40021000;
+
+volatile uint32_t * RCC_IOPENR = (uint32_t *) 0x40021034;
+volatile uint32_t * RCC_APBENR1 = (uint32_t *) 0x4002103C;
+
+/* Defining GPIO Registers used  */
+/*
+USART2 is mapped to GPIOA port.
+
+GPIOx_MODER --> At an Offset of 0x00
+GPIOx_AFRL --> At an Offset of 0x20
+
+*/
+volatile uint32_t * GPIOA = (uint32_t *) 0x50000000;
+
+volatile uint32_t * GPIOx_MODER = (uint32_t *) 0x50000000;
+volatile uint32_t * GPIOx_AFRL = (uint32_t *) 0x50000020;
+
+/* Defining SysTick Registers used  */
+/*
+
+SYST_CSR --> At an Offset of 0x10
+SYST_RVR --> At an Offset of 0x14
+
+*/
+volatile uint32_t * SYST_CSR = (uint32_t *) 0xE000E010;
+volatile uint32_t * SYST_RVR = (uint32_t *) 0xE000E014;
+
+/* Define NVIC Register  */
+#define NVIC_ISER0 ((volatile uint32_t *)0xE000E100)
+
+/* Interrupt Enable Number */
+#define USART2_IRQn 28u
+
+/* Inline functions for interrupt control */
+static inline void __enable_irq(void) {
+    __asm volatile ("cpsie i" : : : "memory");
+}
+
+static inline void __disable_irq(void) {
+    __asm volatile ("cpsid i" : : : "memory");
+}
+
+/* Inline Function for enabling IRQ */
+static inline void NVIC_EnableIRQ(uint32_t IRQn) {
+    NVIC_ISER0[IRQn >> 5] = (1u << (IRQn & 0x1F));
+}
 
 /*!
  * @brief Initialize UART2 peripheral with 9600 baud, 8N1 configuration.
@@ -83,24 +162,24 @@ uart_init (void)
     }
     
     /* Enable peripheral clocks */
-    RCC->APBENR1 |= (1u << RCC_APBENR1_USART2_BIT);
-    RCC->IOPENR |= (1u << RCC_IOPENR_GPIOA_BIT);
+    *RCC_APBENR1 |= (1u << RCC_APBENR1_USART2_BIT);
+    *RCC_IOPENR |= (1u << RCC_IOPENR_GPIOA_BIT);
 
     /* Configure PA2 (TX) and PA3 (RX) as alternate function mode */
-    GPIOA->MODER &= ~(0x3u << (BITS_PER_PIN * PA2_PIN_NUM));
-    GPIOA->MODER &= ~(0x3u << (BITS_PER_PIN * PA3_PIN_NUM));
-    GPIOA->MODER |= (GPIO_MODER_AF_MODE << (BITS_PER_PIN * PA2_PIN_NUM));
-    GPIOA->MODER |= (GPIO_MODER_AF_MODE << (BITS_PER_PIN * PA3_PIN_NUM));
+    *GPIOx_MODER &= ~(0x3u << (BITS_PER_PIN * PA2_PIN_NUM));
+    *GPIOx_MODER &= ~(0x3u << (BITS_PER_PIN * PA3_PIN_NUM));
+    *GPIOx_MODER |= (GPIO_MODER_AF_MODE << (BITS_PER_PIN * PA2_PIN_NUM));
+    *GPIOx_MODER |= (GPIO_MODER_AF_MODE << (BITS_PER_PIN * PA3_PIN_NUM));
 
     /* Set alternate function AF1 for USART2 on PA2 */
-    GPIOA->AFR[0] &= ~(0xFu << PA2_AFR_SHIFT);
-    GPIOA->AFR[0] |= (GPIO_AFR_AF1 << PA2_AFR_SHIFT);
+    *GPIOx_AFRL &= ~(0xFu << PA2_AFR_SHIFT);
+    *GPIOx_AFRL |= (GPIO_AFR_AF1 << PA2_AFR_SHIFT);
 
     /* Configure baud rate for 9600 @ 16MHz system clock */
-    USART2->BRR = BAUD_RATE_9600_AT_16MHZ;
+    *USART_BRR = BAUD_RATE_9600_AT_16MHZ;
     
     /* Enable USART, transmitter, and receiver */
-    USART2->CR1 |= ((1u << USART_CR1_UE_BIT) | 
+    *USART_CR1 |= ((1u << USART_CR1_UE_BIT) | 
                     (1u << USART_CR1_TE_BIT) | 
                     (1u << USART_CR1_RE_BIT));
         
@@ -144,7 +223,7 @@ uart_transmit_buffer (char const * const p_str)
     g_tx_index = 0u;
     
     /* Enable TXE interrupt to start transmission */
-    USART2->CR1 |= (1u << USART_CR1_TXEIE_BIT);
+    *USART_CR1 |= (1u << USART_CR1_TXEIE_BIT);
     
     return 0;
 }
@@ -174,7 +253,7 @@ uart_receive_buffer (void)
     __enable_irq();
 
     /* Enable RXNE interrupt to start reception */
-    USART2->CR1 |= (1u << USART_CR1_RXNEIE_BIT);
+    *USART_CR1 |= (1u << USART_CR1_RXNEIE_BIT);
     
     return 0;
 }
@@ -193,32 +272,32 @@ USART2_IRQHandler (void)
     bool_t b_has_error = FALSE;  /* Changed to bool_t for Keil */
 
     /* Handle transmit interrupt - TXE flag set */
-    if (((USART2->ISR & (1u << USART_ISR_TXE_BIT)) != 0u) && 
+    if (((*USART_ISR & (1u << USART_ISR_TXE_BIT)) != 0u) && 
         (UART_STATE_TX_BUSY == g_tx_state))
     {
         if ((NULL != g_p_tx_buffer) && (g_tx_index < g_tx_length))
         {
-            USART2->TDR = (uint32_t)g_p_tx_buffer[g_tx_index];
+            *USART_TDR = (uint32_t)g_p_tx_buffer[g_tx_index];
             g_tx_index++;
         }
         else
         {
             /* Transmission complete */
-            USART2->CR1 &= ~(1u << USART_CR1_TXEIE_BIT);
+            *USART_CR1 &= ~(1u << USART_CR1_TXEIE_BIT);
             g_p_tx_buffer = NULL;
             g_tx_state = UART_STATE_IDLE;
         }
     }
 
     /* Handle receive interrupt - RXNE flag set */
-    if (((USART2->ISR & (1u << USART_ISR_RXNE_BIT)) != 0u) && 
+    if (((*USART_ISR & (1u << USART_ISR_RXNE_BIT)) != 0u) && 
         (UART_STATE_RX_BUSY == g_rx_state))
     {
         /* Check for hardware errors */
-        b_has_error = (((USART2->ISR & (1u << USART_ISR_ORE_BIT)) != 0u) ||
-                       ((USART2->ISR & (1u << USART_ISR_FE_BIT)) != 0u) ||
-                       ((USART2->ISR & (1u << USART_ISR_NF_BIT)) != 0u) ||
-                       ((USART2->ISR & (1u << USART_ISR_PE_BIT)) != 0u));
+        b_has_error = (((*USART_ISR & (1u << USART_ISR_ORE_BIT)) != 0u) ||
+                       ((*USART_ISR & (1u << USART_ISR_FE_BIT)) != 0u) ||
+                       ((*USART_ISR & (1u << USART_ISR_NF_BIT)) != 0u) ||
+                       ((*USART_ISR & (1u << USART_ISR_PE_BIT)) != 0u));
 
         if (!b_has_error)
         {
@@ -227,7 +306,7 @@ USART2_IRQHandler (void)
             /* Buffer has space for new data plus null terminator */
             if (g_rx_index < (RX_BUFFER_SIZE_BYTES - 1u))
             {
-                g_p_rx_buffer[g_rx_index] = (char)USART2->RDR;
+                g_p_rx_buffer[g_rx_index] = (char) *USART_RDR;
                 g_rx_index++;
 
                 /* Check for line ending characters */
@@ -237,41 +316,41 @@ USART2_IRQHandler (void)
                 {
                     g_p_rx_buffer[g_rx_index] = '\0';
                     g_rx_state = UART_STATE_IDLE;
-                    USART2->CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
+                    *USART_CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
                 }
             }
             else
             {
                 /* Buffer overflow - disable interrupt */
-                USART2->CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
+                *USART_CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
                 g_rx_state = UART_STATE_IDLE;
             }
         }
         else
         {
             /* Hardware error detected */
-            USART2->CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
+            *USART_CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
             g_rx_state = UART_STATE_ERROR;
             
             /* Identify and clear specific error */
-            if ((USART2->ISR & (1u << USART_ISR_ORE_BIT)) != 0u)
+            if ((*USART_ISR & (1u << USART_ISR_ORE_BIT)) != 0u)
             {
-                USART2->ICR |= (1u << USART_ISR_ORE_BIT);
+                *USART_ICR |= (1u << USART_ISR_ORE_BIT);
                 g_error = UART_ERROR_OVERRUN;
             }
-            else if ((USART2->ISR & (1u << USART_ISR_FE_BIT)) != 0u)
+            else if ((*USART_ISR & (1u << USART_ISR_FE_BIT)) != 0u)
             {
-                USART2->ICR |= (1u << USART_ISR_FE_BIT);
+                *USART_ICR |= (1u << USART_ISR_FE_BIT);
                 g_error = UART_ERROR_FRAMING;
             }
-            else if ((USART2->ISR & (1u << USART_ISR_PE_BIT)) != 0u)
+            else if ((*USART_ISR & (1u << USART_ISR_PE_BIT)) != 0u)
             {
-                USART2->ICR |= (1u << USART_ISR_PE_BIT);
+                *USART_ICR |= (1u << USART_ISR_PE_BIT);
                 g_error = UART_ERROR_PARITY;
             }
-            else if ((USART2->ISR & (1u << USART_ISR_NF_BIT)) != 0u)
+            else if ((*USART_ISR & (1u << USART_ISR_NF_BIT)) != 0u)
             {
-                USART2->ICR |= (1u << USART_ISR_NF_BIT);
+                *USART_ICR |= (1u << USART_ISR_NF_BIT);
                 g_error = UART_ERROR_NOISE;
             }
             else
@@ -297,7 +376,7 @@ uart_error_reset (void)
         g_rx_state = UART_STATE_RX_BUSY;
         g_error = UART_ERROR_NONE;
         g_rx_index = 0u;
-        USART2->CR1 |= (1u << USART_CR1_RXNEIE_BIT);
+        *USART_CR1 |= (1u << USART_CR1_RXNEIE_BIT);
     }
 }
 
@@ -314,22 +393,22 @@ void
 delay_ms (uint32_t milliseconds)
 {
     /* Enable SysTick with processor clock */
-    SysTick->CTRL |= ((1u << SYSTICK_CTRL_ENABLE_BIT) | 
+    *SYST_CSR |= ((1u << SYSTICK_CTRL_ENABLE_BIT) | 
                       (1u << SYSTICK_CTRL_CLKSRC_BIT));
 
-    SysTick->LOAD = (SystemCoreClock / SYSTICK_MS_DIVISOR) - 1u;
+    *SYST_RVR = (SYSTEM_CORE_CLOCK / SYSTICK_MS_DIVISOR) - 1u;
 
     for (uint32_t i = 0u; i < milliseconds; i++)
     {
         /* Wait for COUNTFLAG to be set */
-        while (0u == (SysTick->CTRL & (1u << SYSTICK_CTRL_COUNTFLAG_BIT)))
+        while (0u == (*SYST_CSR & (1u << SYSTICK_CTRL_COUNTFLAG_BIT)))
         {
             /* Busy wait */
         }
     }
 
     /* Disable SysTick */
-    SysTick->CTRL &= ~(1u << SYSTICK_CTRL_ENABLE_BIT);
+    *SYST_CSR &= ~(1u << SYSTICK_CTRL_ENABLE_BIT);
 }
 
 #ifdef __cplusplus

@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "name": "ARM-GCC",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/arm-none-eabi/include/**"
+            ],
+            "defines": [],
+            "compilerPath": "C:/Program Files (x86)/Arm GNU Toolchain arm-none-eabi/14.3 rel1/bin/arm-none-eabi-gcc.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-gcc-arm",
+            "compilerArgs": [
+                "-mcpu=cortex-m0plus",
+                "-mthumb"
+            ]
+        }
+    ],
+    "version": 4
+}

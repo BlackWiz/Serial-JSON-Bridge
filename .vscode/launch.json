@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Nucleo G071RB",
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "openocd",
+            "cwd": "${workspaceFolder}",
+
+            // --- YOU MUST EDIT THE LINES BELOW ---
+
+            // 1. Point this to the .elf file that your Makefile creates.
+            "executable": "./firmware.elf",
+
+            "serverpath": "C:\\msys64\\mingw64\\bin\\openocd.exe",
+
+            // 2. Change this to the EXACT name of your microcontroller.
+            //    This is critical for the debugger to work.
+            //    Examples: "STM32F103C8", "STM32F407VG", "LPC1768"
+            "device": "STM32G071RB",
+
+            // 3. These are the instruction manuals for the OpenOCD "thermometer".
+            //    They tell it how to talk to your debug probe and your chip.
+            //    Find the correct files in C:\msys64\mingw64\share\openocd\scripts
+            "configFiles": [
+                // First file: for your debug probe.
+                // Examples: "interface/stlink.cfg", "interface/jlink.cfg"
+                "interface/stlink.cfg",
+
+                // Second file: for your target microcontroller family.
+                // Examples: "target/stm32f1x.cfg", "target/stm32f4x.cfg"
+                "target/stm32g0x.cfg"
+            ]
+        }
+    ]
+}

@@ -9,7 +9,6 @@
  * COPYRIGHT NOTICE: (c) 2025 Your Name. All rights reserved.
  */
 
-#include "stm32g0xx.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -35,6 +34,20 @@ extern "C" {
 #define JSON_ERR_PARSE_FAILED   1
 #define JSON_ERR_NO_OBJECT      2
 #define JSON_SUCCESS            0
+
+/* Interrupt Enable Number */
+#define USART2_IRQn 28u
+
+/* Inline functions for interrupt control */
+static inline void __enable_irq(void) {
+    __asm volatile ("cpsie i" : : : "memory");
+}
+
+/* Inline Function for enabling IRQ */
+static inline void NVIC_EnableIRQ(uint32_t IRQn) {
+    volatile uint32_t *NVIC_ISER0 = (volatile uint32_t *)0xE000E100;
+    NVIC_ISER0[IRQn >> 5] = (1u << (IRQn & 0x1F));
+}
 
 /* External UART state variables */
 extern volatile uart_state_t g_tx_state;
