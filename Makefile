@@ -1,9 +1,11 @@
 # Part 1: VARIABLES
 #----------------------------------------------------
 TARGET = firmware
-SRCS = main.c syscalls.c startup.c jsonprocess.c jsmn.c uart.c
 CC = arm-none-eabi-gcc
 OBJDUMP = arm-none-eabi-objdump
+
+# Default sources for production build (JSON parser)
+SRCS = main.c syscalls.c startup.c jsonprocess.c jsmn.c uart.c
 
 # Automatically create lists of derived files
 OBJS = $(SRCS:.c=.o)
@@ -28,8 +30,26 @@ LDFLAGS += --specs=nosys.specs
 
 # Part 3: RULES
 #----------------------------------------------------
-# The default goal: build the final .elf file
+# The default goal: build the final .elf file (production)
 all: $(TARGET).elf
+
+# Manual testing build
+test-manual:
+	$(MAKE) clean
+	$(MAKE) SRCS="test.c syscalls.c startup.c uart.c" all
+	$(MAKE) flash
+
+# Unit testing build
+test-unit:
+	$(MAKE) clean
+	$(MAKE) SRCS="uart_unit_test.c syscalls.c startup.c uart.c" all
+	$(MAKE) flash
+
+# Integration testing build
+test-integration:
+	$(MAKE) clean
+	$(MAKE) SRCS="uart_integration_test.c syscalls.c startup.c uart.c" all
+	$(MAKE) flash
 
 # Rule to link all object files (.o) into the final executable (.elf)
 $(TARGET).elf: $(OBJS)
@@ -43,21 +63,21 @@ $(TARGET).elf: $(OBJS)
 %.i: %.c
 	$(CC) $(MCU) $(CFLAGS) -E -o $@ $<
 
-# === NEW: Rule to generate an assembly file (.s) from a .c file ===
+# Rule to generate an assembly file (.s) from a .c file
 %.s: %.c
 	$(CC) $(MCU) $(CFLAGS) -S -o $@ $<
 
 # Part 4: TARGETS (The commands you can run)
 #----------------------------------------------------
 # Flash the program to the chip
-flash: all
+flash: 
 	openocd -f interface/stlink.cfg -f target/stm32g0x.cfg -c "program $(TARGET).elf verify reset exit"
 	
 # Disassemble the final .elf file into a .asm file
 disasm: $(TARGET).elf
 	$(OBJDUMP) -d -S $< > $(TARGET).asm
 
-# Generate .s assembly files for all C sources ===
+# Generate .s assembly files for all C sources
 assembly: $(ASSEMBLY)
 
 # Compile only, without linking
@@ -69,4 +89,3 @@ preprocess: $(PREPROCESSED)
 # Clean up all generated files
 clean:
 	rm -f $(TARGET).elf $(OBJS) $(PREPROCESSED) $(ASSEMBLY) $(TARGET).map $(TARGET).asm
-

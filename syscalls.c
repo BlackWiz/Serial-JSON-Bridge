@@ -17,6 +17,8 @@ int _lseek(int fd, int ptr, int dir);
 int _read(int fd, char *ptr, int len);
 int _write(int fd, char *ptr, int len);
 void* _sbrk(int incr);
+int _getpid(void);
+int _kill(int pid, int sig);
 
 
 // These functions are the minimal implementations required for the C library.
@@ -54,6 +56,17 @@ int _read(int fd, char *ptr, int len) {
 int _write(int fd, char *ptr, int len) {
     // A real implementation could write to a UART here.
     return len;
+}
+
+int _getpid(void) {
+    // Return a dummy process ID
+    return 1;
+}
+
+int _kill(int pid, int sig) {
+    // We don't have processes, so return an error
+    errno = EINVAL;
+    return -1;
 }
 
 void* _sbrk(int incr) {

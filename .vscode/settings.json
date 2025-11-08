@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "jsonprocess.h": "c"
+        "jsonprocess.h": "c",
+        "stdio.h": "c",
+        "stdint.h": "c"
     }
 }

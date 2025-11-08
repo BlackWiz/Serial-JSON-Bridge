@@ -42,6 +42,7 @@ extern "C" {
 #define BITS_PER_PIN               2u
 #define AFR_BITS_PER_PIN           4u
 #define PA2_AFR_SHIFT              8u
+#define PA3_AFR_SHIFT              12u
 
 /* Baud rate calculation for 16MHz clock, 9600 baud */
 #define BAUD_RATE_9600_AT_16MHZ    1667u
@@ -174,6 +175,10 @@ uart_init (void)
     /* Set alternate function AF1 for USART2 on PA2 */
     *GPIOx_AFRL &= ~(0xFu << PA2_AFR_SHIFT);
     *GPIOx_AFRL |= (GPIO_AFR_AF1 << PA2_AFR_SHIFT);
+
+    /* Set alternate function AF1 for USART2 on PA3 */
+    *GPIOx_AFRL &= ~(0xFu << PA3_AFR_SHIFT);
+    *GPIOx_AFRL |= (GPIO_AFR_AF1 << PA3_AFR_SHIFT);
 
     /* Configure baud rate for 9600 @ 16MHz system clock */
     *USART_BRR = BAUD_RATE_9600_AT_16MHZ;
