@@ -1,101 +1,255 @@
-# test.c - UART Testing Framework
+# UART Testing Framework
 
-## Purpose
+## Overview
 
-This file exists to validate UART communication under real-world conditions. Not simulation. Not theory. Actual byte-by-byte transmission and reception on bare-metal hardware.
+Three-tier testing strategy to validate UART driver on bare-metal STM32G0:
 
-The goal is simple: prove the driver works before integrating it into the JSON parser pipeline.
-
-## What It Does Now
-
-Currently implements two testing modes via `UART_CONFIG`:
-
-**UART_NORMAL Mode:**
-- Transmits "Hello I am Iron Man" every 5 seconds
-- Tests basic TX functionality with timing control
-- Validates interrupt-driven transmission state machine
-- Enables RX buffer readiness for future bidirectional tests
-
-**UART_ECHO Mode (RX_B2B):**
-- Receives data over UART
-- Immediately echoes it back
-- Tests full duplex communication
-- Validates RX→TX state transitions without data loss
-
-Both modes verify:
-- Interrupt enable/disable sequences work correctly
-- State machines don't hang or race
-- Buffer management under continuous operation
-
-## Test Scenarios to Implement
-
-### 1. Basic Protocol Validation
-- **Single Byte Echo**: Verify minimal payload handling
-- **Fixed Length Packets**: Test 10, 50, 100 byte transmissions
-- **Null Termination Handling**: Ensure proper string termination detection
-- **Line Ending Variations**: Test `\r`, `\n`, `\r\n` detection
-
-### 2. Buffer Boundary Tests
-- **Max Buffer Fill (99 bytes)**: Test up to `RX_BUFF_SIZE - 1`
-- **Buffer Overflow Trigger**: Send 101+ bytes and verify graceful failure
-- **Partial Receive Timeout**: Incomplete packet handling
-- **Zero-Length Transmission**: Edge case validation
-
-### 3. Stress & Timing Tests
-- **Rapid Fire Transmission**: Back-to-back sends without delays
-- **Sustained High Throughput**: Continuous 1KB/sec for 60 seconds
-- **Variable Packet Sizes**: Random lengths from 1-100 bytes
-- **Transmission Bursts**: Idle→burst→idle patterns
-
-### 4. Error Injection & Recovery
-- **Simulated Overrun Errors**: Overwhelm RX buffer intentionally
-- **Framing Error Detection**: Test baud rate mismatch scenarios
-- **Noise Error Handling**: Validate error flag clearing via `error_reset()`
-- **State Machine Recovery**: Verify IDLE return after errors
-
-### 5. JSON Integration Prep
-- **Send Raw JSON Strings**: Transmit `{"test": "value"}` and verify reception
-- **Large JSON Payloads**: Test with 200+ char JSON documents
-- **Escaped Characters**: Validate `\"`, `\\`, `\n` in JSON strings
-- **Fragmented JSON Reception**: Multi-interrupt JSON assembly
-
-### 6. Interrupt Behavior Validation
-- **ISR Execution Time**: Profile interrupt handler duration
-- **Nested Interrupt Handling**: Verify TX/RX interrupt priority
-- **Critical Section Integrity**: Test `__disable_irq()` / `__enable_irq()` pairs
-- **State Consistency Under Load**: Concurrent TX and RX operations
-
-### 7. Real-World Scenarios
-- **Command-Response Pattern**: Send command, wait for ACK, proceed
-- **Bidirectional Streaming**: Simultaneous TX and RX active
-- **Connection Timeout**: No data for N seconds, system behavior
-- **Power Cycle Recovery**: Resume communication after MCU reset
-
-## Testing Approach
-
-**Unit Level**: Each UART function tested in isolation (init, transmit, receive, error handling)
-
-**Integration Level**: Full TX→RX→echo loops with actual data payloads
-
-**Stress Level**: Push hardware limits—max baud, max buffer, max duration
-
-**Failure Analysis**: Intentionally break things to verify error paths work
-
-## Future Additions
-
-- Automated test runner with pass/fail reporting over UART
-- Baud rate switching tests (9600 → 115200 → 9600)
-- DMA-based UART comparison (interrupt vs DMA throughput)
-- Multi-device communication (STM32 ↔ STM32)
-- Integration with `jsonprocess.c` for end-to-end pipeline validation
-
-## Current Status
-
-- Basic echo working
-- Normal mode transmission validated
-- Error detection infrastructure in place
-- Ready for systematic test case expansion
+1. **Manual Tests** (`test.c`) - Basic TX/RX validation
+2. **Unit Tests** (`uart_unit_test.c`) - Individual function validation  
+3. **Integration Tests** (`uart_integration_test.c`) - State machine and concurrency validation
 
 ---
 
-**Next Step**: Implement packet size stress tests, starting with 10/50/100 byte fixed transmissions.
+## Test Architecture
+
+```mermaid
+flowchart TD
+    A[Start Testing] --> B{Choose Test Level}
+    
+    B -->|Manual| C[test.c]
+    B -->|Unit| D[uart_unit_test.c]
+    B -->|Integration| E[uart_integration_test.c]
+    
+    C --> C1[UART_MODE_NORMAL]
+    C --> C2[UART_MODE_ECHO]
+    
+    C1 --> C1A[TX: 'Hello I am Iron Man'<br/>every 5 seconds]
+    C1A --> C1B[Monitor via<br/>Serial Terminal]
+    
+    C2 --> C2A[RX: Wait for data]
+    C2A --> C2B[TX: Echo back<br/>immediately]
+    C2B --> C2C[Verify with<br/>loopback/terminal]
+    
+    D --> D1[9 Automated Tests]
+    D1 --> D2[Init Validation]
+    D1 --> D3[NULL Pointer Checks]
+    D1 --> D4[Busy State Rejection]
+    D1 --> D5[Single/Multi Byte TX]
+    D1 --> D6[RX Init & Rejection]
+    D1 --> D7[Error Recovery]
+    D1 --> D8[Timing Validation]
+    
+    D2 & D3 & D4 & D5 & D6 & D7 & D8 --> D9[Print Summary:<br/>9/9 Tests]
+    
+    E --> E1[6 Automated Tests]
+    E1 --> E2[TX State Machine:<br/>IDLE→BUSY→IDLE]
+    E1 --> E3[RX State Machine:<br/>IDLE→BUSY→IDLE]
+    E1 --> E4[TX Stress:<br/>20 rapid packets]
+    E1 --> E5[TX/RX Isolation:<br/>Concurrent ops]
+    E1 --> E6[Error Recovery:<br/>All 4 error types]
+    E1 --> E7[Buffer Boundary:<br/>Near-overflow test]
+    
+    E2 & E3 & E4 & E5 & E6 & E7 --> E8[Print Summary:<br/>6/6 Tests]
+    
+    C1B & C2C --> F[Manual Verification]
+    D9 & E8 --> G[Automated PASS/FAIL]
+    
+    F & G --> H[Testing Complete]
+    
+    style C fill:#e1f5ff
+    style D fill:#fff3cd
+    style E fill:#d4edda
+    style H fill:#d1ecf1
+```
+
+---
+
+## 1. Manual Tests (`test.c`)
+
+**Purpose:** Quick visual validation of basic functionality.
+
+### Test Modes
+
+| Mode | Config | Behavior | Validation |
+|------|--------|----------|------------|
+| **NORMAL** | `UART_MODE_NORMAL` | Transmits `"Hello I am Iron Man\r\n"` every 5 seconds | Open serial terminal, observe periodic messages |
+| **ECHO** | `UART_MODE_ECHO` | Receives data → Immediately echoes back | Type in terminal, verify echo response |
+
+### Running Manual Tests
+
+```bash
+make test-manual  # Compiles test.c, flashes to board
+```
+
+**Expected Output:**
+- **NORMAL:** Continuous messages in terminal every 5s
+- **ECHO:** Typed characters appear twice (original + echo)
+
+---
+
+## 2. Unit Tests (`uart_unit_test.c`)
+
+**Purpose:** Validate each driver function in isolation.
+
+### Test Matrix
+
+| # | Test Name | What It Validates | Pass Criteria |
+|---|-----------|-------------------|---------------|
+| 1 | `test_uart_init_success` | UART peripheral initialization | Returns 0, states = IDLE |
+| 2 | `test_transmit_null_pointer` | NULL pointer rejection | Returns -1, no state change |
+| 3 | `test_transmit_busy_reject` | Concurrent TX prevention | 2nd TX returns -2 |
+| 4 | `test_single_byte_transmit` | Minimal payload handling | `"X"` transmits, returns to IDLE |
+| 5 | `test_fixed_length_packets` | 10/20 byte transmissions | Both packets send successfully |
+| 6 | `test_receive_init` | RX buffer preparation | Returns 0, state = RX_BUSY |
+| 7 | `test_receive_busy_reject` | Concurrent RX prevention | 2nd RX returns -1 |
+| 8 | `test_error_recovery` | Error state reset mechanism | Error cleared, RX_BUSY restored |
+| 9 | `test_delay_timing` | 500ms blocking delay | Completes without hang |
+
+### Running Unit Tests
+
+```bash
+make test-unit  # Compiles uart_unit_test.c, flashes to board
+```
+
+**Expected Output:**
+```
+[TEST 1] UART Init Success
+PASS
+
+[TEST 2] Transmit NULL Pointer
+PASS
+
+...
+
+========================================
+       UNIT TEST SUMMARY
+========================================
+Total Tests:  9
+Passed:       9
+Failed:       0
+========================================
+
+ALL TESTS PASSED!
+```
+
+---
+
+## 3. Integration Tests (`uart_integration_test.c`)
+
+**Purpose:** Validate state machines and concurrent operations (no loopback required).
+
+### Test Matrix
+
+| # | Test Name | What It Validates | Pass Criteria |
+|---|-----------|-------------------|---------------|
+| 1 | `test_tx_state_machine` | TX transitions: IDLE→BUSY→IDLE | Completes within 2s timeout |
+| 2 | `test_rx_state_machine` | RX transitions: IDLE→BUSY→IDLE | Enters BUSY, manual cancel to IDLE |
+| 3 | `test_tx_stress` | 20 rapid back-to-back transmissions | All packets send without hang |
+| 4 | `test_tx_rx_isolation` | TX and RX operate independently | TX works while RX busy, no interference |
+| 5 | `test_error_recovery_integration` | Recovery from all 4 error types | Each error type resets successfully |
+| 6 | `test_buffer_boundary` | RX buffer overflow protection | Index stays < `RX_BUFFER_SIZE` |
+
+### Running Integration Tests
+
+```bash
+make test-integration  # Compiles uart_integration_test.c, flashes
+```
+
+**Expected Output:**
+```
+=== Test: TX State Machine ===
+PASS
+
+=== Test: RX State Machine ===
+PASS
+
+...
+
+========================================
+   INTEGRATION TEST SUMMARY (No Loopback)
+========================================
+Total Tests:  6
+Passed:       6
+Failed:       0
+========================================
+
+ALL TESTS PASSED!
+Note: These tests don't require loopback.
+For full RX testing, use physical loopback.
+```
+
+---
+
+## Quick Reference
+
+### Build & Flash Commands
+
+```bash
+# Production build (JSON parser)
+make all
+make flash
+
+# Test builds
+make test-manual        # Manual TX/RX validation
+make test-unit          # 9 automated unit tests
+make test-integration   # 6 automated integration tests
+```
+
+### Test Progression Flow
+
+```
+Manual Tests → Unit Tests → Integration Tests → Production
+    ↓              ↓              ↓                  ↓
+ Sanity       Function      State Machine      Full Application
+  Check       Isolation     Validation         (JSON Parser)
+```
+
+---
+
+## Hardware Requirements
+
+| Test Type | Hardware Needed |
+|-----------|----------------|
+| Manual (NORMAL) | STM32 + USB cable + Serial terminal (PuTTY/TeraTerm) |
+| Manual (ECHO) | Same as above |
+| Unit Tests | STM32 + USB cable + Serial terminal |
+| Integration Tests | STM32 + USB cable + Serial terminal |
+| **Optional:** Full RX validation | Add TX-RX loopback wire (PA2→PA3) |
+
+---
+
+## Interpreting Results
+
+### ✅ All Tests Passed
+- Driver functions correctly
+- State machines stable
+- Error handling works
+- Ready for JSON integration
+
+### ❌ Some Tests Failed
+1. Check serial terminal output for specific failure
+2. Verify hardware connections (USB, power)
+3. Confirm baud rate = 9600 in terminal
+4. Check for stack overflow if random crashes occur
+
+---
+
+## Key Learnings from Testing
+
+| Issue Discovered | Root Cause | Fix |
+|-----------------|------------|-----|
+| Hard Faults | Stack overflow from large buffers | Reduced `RX_BUFFER_SIZE` to 100 bytes |
+| RX Hangs | Missing newline detection | Added `\r\n` checks in ISR |
+| TX Corruption | Concurrent access to TX buffer | Added `__disable_irq()` critical sections |
+| Lost Data | Overrun errors not cleared | Implemented error recovery via `uart_error_reset()` |
+
+---
+
+## Next Steps
+
+After all tests pass:
+1. Return to production build: `make clean && make all`
+2. Run JSON parser: `make flash`
+3. Observe parsed JSON output in serial terminal
+
+**Testing validates the foundation. Now build on it.**
