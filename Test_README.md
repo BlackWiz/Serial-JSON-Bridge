@@ -180,6 +180,57 @@ For full RX testing, use physical loopback.
 
 ---
 
+## 4. HW Independent TDD Unit Tests (`uart_test.c`)
+
+**Purpose:** Validate each driver function in isolation independent of HW connection.
+
+### Test Matrix
+
+|  # | Test Name | What It Validates | Pass Criteria |
+|----|-----------|-------------------|---------------|
+| 1  | `test_tx_sends_first_byte` | Verify first byte is written to TDR and indices update | USART_TDR == 'A',          g_tx_index == 1, g_tx_state == TX_BUSY |
+| 2  | `test_tx_sends_multiple_bytes` | Verify sequential bytes are written for multi-byte payloads | Each loop: USART_TDR == data[i], g_tx_index == i+1 |
+| 3  | `test_tx_completes_transmission` | Verify behavior when tx index already past end (disable TXEIE, clear buffer and set IDLE) | g_tx_state == IDLE, g_p_tx_buffer == NULL, TXEIE bit cleared |
+| 4  | `test_rx_receives_single_byte` | Verify single RX byte stored into RX buffer when no error | err == UART_ERROR_NONE, g_p_rx_buffer[0] == 'X', g_rx_index == 1 |
+| 5  | `test_rx_detects_newline` | Verify newline terminates message, NUL terminator added and RX disabled | g_p_rx_buffer[0] == '\n', g_p_rx_buffer[1] == '\0', g_rx_state == IDLE, RXNEIE cleared |
+| 6  | `test_rx_detects_carriage_return` | Same as newline but for \r | g_p_rx_buffer[0] == '\r', g_p_rx_buffer[1] == '\0', g_rx_state == IDLE |
+| 7  | `test_rx_buffer_overflow_protection` | Verify RX stops when buffer full (index == RX_BUFFER_SIZE - 1) | g_rx_state == IDLE, RXNEIE cleared |
+| 8  | `test_has_error_detects_overrun` | Verify uart_has_error() detects overrun bit | uart_has_error() == TRUE when ORE bit set |
+| 9  | `test_has_error_detects_overrun` | Verify uart_has_error() detects framing error | uart_has_error() == TRUE when FE bit set |
+| 10 | `test_has_error_detects_framing` | Verify error handler clears RXNEIE, sets ERROR state, and writes to ICR for ORE | err == UART_ERROR_OVERRUN, g_rx_state == UART_STATE_ERROR, RXNEIE cleared, ICR has ORE bit set |
+| 11 | `test_handle_error_clears_overrun` | Verify receiving a full message byte-by-byte ends in IDLE and stored string identical | g_rx_state == IDLE, strcmp(g_p_rx_buffer, "TEST\n") == 0, RXNEIE cleared |
+
+### Running Unit Tests
+
+```bash
+make test-autoTDD  # Compiles uart_test.c, flashing to board is not required
+```
+
+**Expected Output:**
+```
+========================================
+  UART Driver Unit Tests
+========================================
+
+TEST: TX sends first byte... PASS
+TEST: TX sends multiple bytes... PASS
+TEST: TX completes transmission... PASS
+TEST: RX receives single byte... PASS
+TEST: RX detects newline... PASS
+TEST: RX detects carriage return... PASS
+TEST: RX buffer overflow protection... PASS
+TEST: RX receives complete message... PASS
+TEST: Has error detects overrun... PASS
+TEST: Has error detects framing error... PASS
+TEST: Handle error clears overrun flag... PASS
+
+========================================
+  All Tests Passed! ✓
+========================================
+```
+
+---
+
 ## Quick Reference
 
 ### Build & Flash Commands
@@ -193,6 +244,7 @@ make flash
 make test-manual        # Manual TX/RX validation
 make test-unit          # 9 automated unit tests
 make test-integration   # 6 automated integration tests
+make test-autoTDD       # 11 automated HW independent TDD tests
 ```
 
 ### Test Progression Flow

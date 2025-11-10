@@ -51,6 +51,12 @@ test-integration:
 	$(MAKE) SRCS="uart_integration_test.c syscalls.c startup.c uart.c" all
 	$(MAKE) flash
 
+# Auto TDD testing build
+test-autoTDD:
+	$(MAKE) clean
+	$(MAKE) SRCS="uart_test.c syscalls.c startup.c uart.c" all
+	$(MAKE) flash
+
 # Rule to link all object files (.o) into the final executable (.elf)
 $(TARGET).elf: $(OBJS)
 	$(CC) $(MCU) $(CFLAGS) $(LDFLAGS) -o $@ $^

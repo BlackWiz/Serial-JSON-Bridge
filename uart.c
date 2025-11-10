@@ -146,6 +146,109 @@ static inline void NVIC_EnableIRQ(uint32_t IRQn) {
 }
 
 /*!
+ * @brief Process UART transmit interrupt.
+ * @note Execution time: ~25-30 cycles.
+ */
+static inline void uart_process_tx(void)
+{
+    if ((NULL != g_p_tx_buffer) && (g_tx_index < g_tx_length))
+    {
+        *USART_TDR = (uint32_t)g_p_tx_buffer[g_tx_index];
+        g_tx_index++;
+    }
+    else
+    {
+        /* Transmission complete */
+        *USART_CR1 &= ~(1u << USART_CR1_TXEIE_BIT);
+        g_p_tx_buffer = NULL;
+        g_tx_state = UART_STATE_IDLE;
+    }
+}
+
+/*!
+ * @brief Check if UART has hardware errors.
+ * @return true if error detected, false otherwise.
+ */
+static inline bool_t uart_has_error(void)
+{
+    return (((*USART_ISR & (1u << USART_ISR_ORE_BIT)) != 0u) ||
+            ((*USART_ISR & (1u << USART_ISR_FE_BIT)) != 0u) ||
+            ((*USART_ISR & (1u << USART_ISR_NF_BIT)) != 0u) ||
+            ((*USART_ISR & (1u << USART_ISR_PE_BIT)) != 0u));
+}
+
+/*!
+ * @brief Handle UART RX hardware errors.
+ * @return Specific error code.
+ */
+static inline uart_error_t uart_handle_rx_error(void)
+{
+    *USART_CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
+    g_rx_state = UART_STATE_ERROR;
+    
+    if ((*USART_ISR & (1u << USART_ISR_ORE_BIT)) != 0u)
+    {
+        *USART_ICR |= (1u << USART_ISR_ORE_BIT);
+        return UART_ERROR_OVERRUN;
+    }
+    else if ((*USART_ISR & (1u << USART_ISR_FE_BIT)) != 0u)
+    {
+        *USART_ICR |= (1u << USART_ISR_FE_BIT);
+        return UART_ERROR_FRAMING;
+    }
+    else if ((*USART_ISR & (1u << USART_ISR_PE_BIT)) != 0u)
+    {
+        *USART_ICR |= (1u << USART_ISR_PE_BIT);
+        return UART_ERROR_PARITY;
+    }
+    else if ((*USART_ISR & (1u << USART_ISR_NF_BIT)) != 0u)
+    {
+        *USART_ICR |= (1u << USART_ISR_NF_BIT);
+        return UART_ERROR_NOISE;
+    }
+    
+    return UART_ERROR_NONE;
+}
+
+/*!
+ * @brief Process UART receive interrupt with error checking.
+ * @return Error code (UART_ERROR_NONE if successful).
+ * @note Execution time: ~40-55 cycles.
+ */
+static inline uart_error_t uart_process_rx(void)
+{
+    /* Check for hardware errors */
+    if (uart_has_error())
+    {
+        return uart_handle_rx_error();
+    }
+    
+    /* Buffer overflow check */
+    if (g_rx_index >= (RX_BUFFER_SIZE_BYTES - 1u))
+    {
+        *USART_CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
+        g_rx_state = UART_STATE_IDLE;
+        return UART_ERROR_NONE;
+    }
+    
+    /* Read and store byte */
+    g_p_rx_buffer[g_rx_index] = (char)*USART_RDR;
+    g_rx_index++;
+    
+    /* Check for line ending */
+    if ((g_rx_index > 0u) && 
+        (('\n' == g_p_rx_buffer[g_rx_index - 1u]) || 
+         ('\r' == g_p_rx_buffer[g_rx_index - 1u])))
+    {
+        g_p_rx_buffer[g_rx_index] = '\0';
+        g_rx_state = UART_STATE_IDLE;
+        *USART_CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
+    }
+    
+    return UART_ERROR_NONE;
+}
+
+/*!
  * @brief Initialize UART2 peripheral with 9600 baud, 8N1 configuration.
  *
  * Configures GPIO pins PA2 (TX) and PA3 (RX) for UART alternate function,
@@ -191,7 +294,6 @@ uart_init (void)
     return 0;
 }
 
-
 /*!
  * @brief Transmit a null-terminated string via UART2.
  *
@@ -233,7 +335,6 @@ uart_transmit_buffer (char const * const p_str)
     return 0;
 }
 
-
 /*!
  * @brief Enable interrupt-driven UART reception.
  *
@@ -263,7 +364,6 @@ uart_receive_buffer (void)
     return 0;
 }
 
-
 /*!
  * @brief USART2 interrupt service routine.
  *
@@ -280,92 +380,17 @@ USART2_IRQHandler (void)
     if (((*USART_ISR & (1u << USART_ISR_TXE_BIT)) != 0u) && 
         (UART_STATE_TX_BUSY == g_tx_state))
     {
-        if ((NULL != g_p_tx_buffer) && (g_tx_index < g_tx_length))
-        {
-            *USART_TDR = (uint32_t)g_p_tx_buffer[g_tx_index];
-            g_tx_index++;
-        }
-        else
-        {
-            /* Transmission complete */
-            *USART_CR1 &= ~(1u << USART_CR1_TXEIE_BIT);
-            g_p_tx_buffer = NULL;
-            g_tx_state = UART_STATE_IDLE;
-        }
+        uart_process_tx();
     }
 
     /* Handle receive interrupt - RXNE flag set */
     if (((*USART_ISR & (1u << USART_ISR_RXNE_BIT)) != 0u) && 
         (UART_STATE_RX_BUSY == g_rx_state))
     {
-        /* Check for hardware errors */
-        b_has_error = (((*USART_ISR & (1u << USART_ISR_ORE_BIT)) != 0u) ||
-                       ((*USART_ISR & (1u << USART_ISR_FE_BIT)) != 0u) ||
-                       ((*USART_ISR & (1u << USART_ISR_NF_BIT)) != 0u) ||
-                       ((*USART_ISR & (1u << USART_ISR_PE_BIT)) != 0u));
-
-        if (!b_has_error)
-        {
-            g_error = UART_ERROR_NONE;
-            
-            /* Buffer has space for new data plus null terminator */
-            if (g_rx_index < (RX_BUFFER_SIZE_BYTES - 1u))
-            {
-                g_p_rx_buffer[g_rx_index] = (char) *USART_RDR;
-                g_rx_index++;
-
-                /* Check for line ending characters */
-                if ((g_rx_index > 0u) && 
-                    (('\n' == g_p_rx_buffer[g_rx_index - 1u]) || 
-                     ('\r' == g_p_rx_buffer[g_rx_index - 1u])))
-                {
-                    g_p_rx_buffer[g_rx_index] = '\0';
-                    g_rx_state = UART_STATE_IDLE;
-                    *USART_CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
-                }
-            }
-            else
-            {
-                /* Buffer overflow - disable interrupt */
-                *USART_CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
-                g_rx_state = UART_STATE_IDLE;
-            }
-        }
-        else
-        {
-            /* Hardware error detected */
-            *USART_CR1 &= ~(1u << USART_CR1_RXNEIE_BIT);
-            g_rx_state = UART_STATE_ERROR;
-            
-            /* Identify and clear specific error */
-            if ((*USART_ISR & (1u << USART_ISR_ORE_BIT)) != 0u)
-            {
-                *USART_ICR |= (1u << USART_ISR_ORE_BIT);
-                g_error = UART_ERROR_OVERRUN;
-            }
-            else if ((*USART_ISR & (1u << USART_ISR_FE_BIT)) != 0u)
-            {
-                *USART_ICR |= (1u << USART_ISR_FE_BIT);
-                g_error = UART_ERROR_FRAMING;
-            }
-            else if ((*USART_ISR & (1u << USART_ISR_PE_BIT)) != 0u)
-            {
-                *USART_ICR |= (1u << USART_ISR_PE_BIT);
-                g_error = UART_ERROR_PARITY;
-            }
-            else if ((*USART_ISR & (1u << USART_ISR_NF_BIT)) != 0u)
-            {
-                *USART_ICR |= (1u << USART_ISR_NF_BIT);
-                g_error = UART_ERROR_NOISE;
-            }
-            else
-            {
-                /* Should never reach here */
-            }
-        }
+        g_error = uart_process_rx();
     }
-}
 
+}
 
 /*!
  * @brief Reset UART receiver after error condition.
