@@ -410,37 +410,6 @@ uart_error_reset (void)
     }
 }
 
-
-/*!
- * @brief Blocking delay using SysTick timer.
- *
- * @param[in] milliseconds Number of milliseconds to delay.
- *
- * @par
- * NOTE: This is a blocking delay and should not be called from ISRs.
- */
-void
-delay_ms (uint32_t milliseconds)
-{
-    /* Enable SysTick with processor clock */
-    *SYST_CSR |= ((1u << SYSTICK_CTRL_ENABLE_BIT) | 
-                      (1u << SYSTICK_CTRL_CLKSRC_BIT));
-
-    *SYST_RVR = (SYSTEM_CORE_CLOCK / SYSTICK_MS_DIVISOR) - 1u;
-
-    for (uint32_t i = 0u; i < milliseconds; i++)
-    {
-        /* Wait for COUNTFLAG to be set */
-        while (0u == (*SYST_CSR & (1u << SYSTICK_CTRL_COUNTFLAG_BIT)))
-        {
-            /* Busy wait */
-        }
-    }
-
-    /* Disable SysTick */
-    *SYST_CSR &= ~(1u << SYSTICK_CTRL_ENABLE_BIT);
-}
-
 #ifdef __cplusplus
 }
 #endif

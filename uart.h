@@ -46,7 +46,6 @@ int32_t uart_init(void);
 int32_t uart_transmit_buffer(char const * const p_str);
 int32_t uart_receive_buffer(void);
 void uart_error_reset(void);
-void delay_ms(uint32_t milliseconds);
 
 #endif /* UART_H */
 

@@ -5,7 +5,7 @@ CC = arm-none-eabi-gcc
 OBJDUMP = arm-none-eabi-objdump
 
 # Default sources for production build (JSON parser)
-SRCS = main.c syscalls.c startup.c jsonprocess.c jsmn.c uart.c
+SRCS = main.c syscalls.c startup.c jsonprocess.c jsmn.c uart.c delay.c
 
 # Automatically create lists of derived files
 OBJS = $(SRCS:.c=.o)
