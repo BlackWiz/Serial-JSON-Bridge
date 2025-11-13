@@ -36,26 +36,26 @@ all: $(TARGET).elf
 # Manual testing build
 test-manual:
 	$(MAKE) clean
-	$(MAKE) SRCS="test.c syscalls.c startup.c uart.c" all
-	$(MAKE) flash
+	$(MAKE) SRCS="test.c startup.c uart.c delay.c" TARGET=test_manual all
+	$(MAKE) TARGET=test_manual flash
 
 # Unit testing build
 test-unit:
 	$(MAKE) clean
-	$(MAKE) SRCS="uart_unit_test.c syscalls.c startup.c uart.c" all
-	$(MAKE) flash
+	$(MAKE) SRCS="uart_unit_test.c startup.c uart.c delay.c" TARGET=uart_unit_test all
+	$(MAKE) TARGET=uart_unit_test flash
 
 # Integration testing build
 test-integration:
 	$(MAKE) clean
-	$(MAKE) SRCS="uart_integration_test.c syscalls.c startup.c uart.c" all
-	$(MAKE) flash
+	$(MAKE) SRCS="uart_integration_test.c startup.c uart.c delay.c" TARGET=uart_integration_test all
+	$(MAKE) TARGET=uart_integration_test flash
 
 # Auto TDD testing build
 test-autoTDD:
 	$(MAKE) clean
-	$(MAKE) SRCS="uart_test.c syscalls.c startup.c uart.c" all
-	$(MAKE) flash
+	$(MAKE) SRCS="uart_test.c startup.c uart.c delay.c" TARGET=uart_test all
+	$(MAKE) TARGET=uart_test flash
 
 # Rule to link all object files (.o) into the final executable (.elf)
 $(TARGET).elf: $(OBJS)
@@ -94,4 +94,4 @@ preprocess: $(PREPROCESSED)
 
 # Clean up all generated files
 clean:
-	rm -f $(TARGET).elf $(OBJS) $(PREPROCESSED) $(ASSEMBLY) $(TARGET).map $(TARGET).asm
+	rm -f *.elf *.o *.i *.s *.map *.asm

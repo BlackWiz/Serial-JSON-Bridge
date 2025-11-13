@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "uart.h"
+#include "delay.h"
 #include "types.h"
 
 /* Test result tracking */
@@ -44,14 +45,13 @@ static inline void NVIC_EnableIRQ(uint32_t IRQn) {
 }
 
 /*!
- * @brief Wait for TX to complete with timeout.
+ * @brief Wait for TX to complete with timeout (non-blocking).
  */
 static void wait_tx_idle(void)
 {
-    uint32_t timeout = 0;
-    while ((g_tx_state != UART_STATE_IDLE) && (timeout < 1000)) {
-        delay_ms(1);
-        timeout++;
+    uint32_t start = delay_get_tick();
+    while ((g_tx_state != UART_STATE_IDLE) && !delay_elapsed(start, 1000)) {
+        /* Non-blocking wait */
     }
 }
 
@@ -63,6 +63,17 @@ static void safe_transmit(char const * const p_str)
     wait_tx_idle();
     uart_transmit_buffer(p_str);
     wait_tx_idle();
+}
+
+/*!
+ * @brief Non-blocking delay helper.
+ */
+static void delay_nb(uint32_t ms)
+{
+    uint32_t start = delay_get_tick();
+    while (!delay_elapsed(start, ms)) {
+        /* Non-blocking wait */
+    }
 }
 
 /*!
@@ -156,15 +167,14 @@ static void test_single_byte_transmit(void)
     wait_tx_idle();
     uart_transmit_buffer("X");
     
-    /* Wait for completion */
-    uint32_t timeout = 0;
-    while ((g_tx_state != UART_STATE_IDLE) && (timeout < 100)) {
-        delay_ms(1);
-        timeout++;
+    /* Wait for completion (non-blocking) */
+    uint32_t start = delay_get_tick();
+    while ((g_tx_state != UART_STATE_IDLE) && !delay_elapsed(start, 100)) {
+        /* Wait */
     }
     
     g_test_results.tests_run++;
-    if ((g_tx_state == UART_STATE_IDLE) && (timeout < 100)) {
+    if ((g_tx_state == UART_STATE_IDLE) && !delay_elapsed(start, 100)) {
         g_test_results.tests_passed++;
         safe_transmit("PASS\r\n");
     } else {
@@ -296,7 +306,7 @@ static void test_delay_timing(void)
 {
     safe_transmit("\r\n[TEST 9] Delay Timing (500ms)\r\n");
     
-    delay_ms(500);
+    delay_nb(500);
     
     g_test_results.tests_run++;
     g_test_results.tests_passed++;
@@ -362,55 +372,59 @@ static void print_test_summary(void)
  */
 int32_t main(void)
 {
+    /* CRITICAL: Initialize delay subsystem FIRST */
+    delay_init();
+    
+    /* Then initialize UART */
     uart_init();
     
     NVIC_EnableIRQ(USART2_IRQn);
     __enable_irq();
     
-    /* Wait for UART to stabilize */
-    delay_ms(1000);
+    /* Wait for UART to stabilize (non-blocking) */
+    delay_nb(1000);
     
     safe_transmit("\r\n\r\n");
     safe_transmit("############################################\r\n");
     safe_transmit("#     UART DRIVER UNIT TEST SUITE         #\r\n");
     safe_transmit("############################################\r\n");
     
-    delay_ms(200);
+    delay_nb(200);
     
     /* Run all unit tests */
     test_uart_init_success();
-    delay_ms(100);
+    delay_nb(100);
     
     test_transmit_null_pointer();
-    delay_ms(100);
+    delay_nb(100);
     
     test_transmit_busy_reject();
-    delay_ms(100);
+    delay_nb(100);
     
     test_single_byte_transmit();
-    delay_ms(100);
+    delay_nb(100);
     
     test_fixed_length_packets();
-    delay_ms(100);
+    delay_nb(100);
     
     test_receive_init();
-    delay_ms(100);
+    delay_nb(100);
     
     test_receive_busy_reject();
-    delay_ms(100);
+    delay_nb(100);
     
     test_error_recovery();
-    delay_ms(100);
+    delay_nb(100);
     
     test_delay_timing();
-    delay_ms(100);
+    delay_nb(100);
     
     /* Print summary */
     print_test_summary();
     
     /* Hold in idle loop */
     for (;;) {
-        delay_ms(1000);
+        delay_nb(1000);
     }
     
     return 0;

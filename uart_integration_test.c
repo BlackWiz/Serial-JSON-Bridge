@@ -1,4 +1,4 @@
-/** @file uart_integration_tests_no_loopback.c
+/** @file uart_integration_test.c
  *
  * @brief Integration tests that DON'T require loopback.
  *
@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "uart.h"
+#include "delay.h"
 #include "types.h"
 
 /* Test configuration */
@@ -43,15 +44,25 @@ static inline void NVIC_EnableIRQ(uint32_t IRQn) {
 }
 
 /*!
- * @brief Wait for TX completion with timeout.
+ * @brief Non-blocking delay helper.
+ */
+static void delay_nb(uint32_t ms)
+{
+    uint32_t start = delay_get_tick();
+    while (!delay_elapsed(start, ms)) {
+        /* Non-blocking wait */
+    }
+}
+
+/*!
+ * @brief Wait for TX completion with timeout (non-blocking).
  */
 static int32_t wait_tx_complete(uint32_t timeout_ms)
 {
-    uint32_t elapsed = 0;
+    uint32_t start = delay_get_tick();
     
-    while ((g_tx_state != UART_STATE_IDLE) && (elapsed < timeout_ms)) {
-        delay_ms(10);
-        elapsed += 10;
+    while ((g_tx_state != UART_STATE_IDLE) && !delay_elapsed(start, timeout_ms)) {
+        /* Non-blocking wait */
     }
     
     return (g_tx_state == UART_STATE_IDLE) ? 0 : -1;
@@ -359,12 +370,16 @@ static void print_integration_summary(void)
  */
 int32_t main(void)
 {
+    /* CRITICAL: Initialize delay subsystem FIRST */
+    delay_init();
+    
+    /* Then initialize UART */
     uart_init();
     
     NVIC_EnableIRQ(USART2_IRQn);
     __enable_irq();
     
-    delay_ms(1000);
+    delay_nb(1000);
     
     safe_transmit("\r\n\r\n");
     safe_transmit("############################################\r\n");
@@ -374,33 +389,33 @@ int32_t main(void)
     safe_transmit("#  physical loopback or echo               #\r\n");
     safe_transmit("############################################\r\n");
     
-    delay_ms(500);
+    delay_nb(500);
     
     /* Run integration tests */
     test_tx_state_machine();
-    delay_ms(200);
+    delay_nb(200);
     
     test_rx_state_machine();
-    delay_ms(200);
+    delay_nb(200);
     
     test_tx_stress();
-    delay_ms(200);
+    delay_nb(200);
     
     test_tx_rx_isolation();
-    delay_ms(200);
+    delay_nb(200);
     
     test_error_recovery_integration();
-    delay_ms(200);
+    delay_nb(200);
     
     test_buffer_boundary();
-    delay_ms(200);
+    delay_nb(200);
     
     /* Print summary */
     print_integration_summary();
     
     /* Hold in idle loop */
     for (;;) {
-        delay_ms(1000);
+        delay_nb(1000);
     }
     
     return 0;
