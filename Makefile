@@ -57,6 +57,12 @@ test-autoTDD:
 	$(MAKE) SRCS="uart_test.c startup.c uart.c delay.c" TARGET=uart_test all
 	$(MAKE) TARGET=uart_test flash
 
+# JSON processing unit tests
+test-json:
+	$(MAKE) clean
+	$(MAKE) SRCS="jsonprocess_test.c startup.c jsmn.c uart.c delay.c" TARGET=jsonprocess_test all
+	$(MAKE) TARGET=jsonprocess_test flash
+
 # Rule to link all object files (.o) into the final executable (.elf)
 $(TARGET).elf: $(OBJS)
 	$(CC) $(MCU) $(CFLAGS) $(LDFLAGS) -o $@ $^
