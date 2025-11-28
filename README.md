@@ -56,6 +56,25 @@ Stack overflow crashed everything. That one mistake taught me more than anything
 
 Send `{"user": "johndoe", "uid": 1000}` and watch it parse, extract, and respond.
 
+## Performance
+
+- **Flash Usage:** 1.8KB (1.4% of 128KB) - Extremely lean.
+- **RAM Usage:** 452 bytes (1.3% of 36KB) - Very efficient.
+- **ISR Execution:** ~5.56 µs worst-case.
+- **CPU Load:** 0.53% at 9600 baud.
+
+*See [PERFORMANCE.md](PERFORMANCE.md) for detailed analysis.*
+
+## Testing
+
+Validated through a 4-layer testing strategy:
+1. **Manual Tests:** Basic TX/RX sanity checks.
+2. **Unit Tests:** 9 automated tests for driver functions.
+3. **Integration Tests:** 6 automated tests for state machines and concurrency.
+4. **JSON Tests:** 8 automated tests for the parser logic.
+
+*See [Test_README.md](Test_README.md) for the full test matrix and instructions.*
+
 ## What Actually Matters
 
 **Memory constraints:** STM32 has limited stack. I overflowed it and got hard faults. Fixed buffers and careful indexing are non-negotiable.
