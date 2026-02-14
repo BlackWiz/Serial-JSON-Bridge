@@ -1,5 +1,7 @@
 # Serial-JSON-Bridge
 
+[![Project Website](https://img.shields.io/badge/View_Project_Website-black?style=for-the-badge&logo=github&logoColor=white)](https://blackwiz.github.io/Serial-JSON-Bridge/)
+
 ## Why This Exists
 
 I built this for one reason: to understand how parsers actually work. How do you take a massive chunk of data, break it into pieces, and send it through a protocol without messing it up?
